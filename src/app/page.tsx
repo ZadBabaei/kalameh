@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/context/LanguageContext';
 import { Navbar, ParticleBackground } from '@/components/layout';
@@ -67,7 +68,21 @@ export default function HomePage() {
       <main className="relative z-10 flex-1 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-4xl">
           {/* Hero */}
-          <div className="text-center mb-12">
+          <div className="text-center mb-12 flex flex-col items-center">
+            <div className="relative mb-6 w-48 h-48 sm:w-60 sm:h-60 md:w-72 md:h-72">
+              <div
+                aria-hidden="true"
+                className="absolute inset-0 bg-[radial-gradient(circle,_rgba(245,166,35,0.28)_0%,_transparent_65%)] blur-xl"
+              />
+              <Image
+                src="/hero.png"
+                alt=""
+                fill
+                priority
+                sizes="(max-width: 640px) 12rem, (max-width: 768px) 15rem, 18rem"
+                className="relative object-contain drop-shadow-[0_10px_30px_rgba(245,166,35,0.25)]"
+              />
+            </div>
             <h1 className="text-5xl sm:text-6xl font-bold text-[#f5a623] mb-4 glow-gold">
               {t('home.title')}
             </h1>

@@ -287,9 +287,9 @@ export default function AddWordsPage() {
       <Navbar language={language} onLanguageToggle={toggleLanguage} gameCode={code} />
 
       <main className="flex-1 px-4 py-8">
-        <div className="max-w-lg mx-auto flex flex-col gap-5">
+        <div className="max-w-lg md:max-w-2xl lg:max-w-3xl mx-auto flex flex-col gap-5">
           <div className="text-center">
-            <h1 className="text-2xl font-bold text-[#f0e6d3]">{t('words.title')}</h1>
+            <h1 className="text-2xl md:text-3xl font-bold text-[#f0e6d3]">{t('words.title')}</h1>
             <p className="text-sm text-[#a89b8c] mt-1">
               {t('words.wordsCount', { count: myWords.length, total: wordsPerPlayer })}
             </p>

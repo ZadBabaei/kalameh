@@ -43,8 +43,8 @@ export default function RulesPage() {
       <Navbar language={language} onLanguageToggle={toggleLanguage} />
 
       <main className="flex-1 px-4 py-8" dir={dir}>
-        <div className="max-w-2xl mx-auto flex flex-col gap-6">
-          <h1 className="text-3xl font-bold text-[#f5a623] text-center glow-gold">
+        <div className="max-w-2xl lg:max-w-3xl mx-auto flex flex-col gap-6">
+          <h1 className="text-3xl md:text-4xl font-bold text-[#f5a623] text-center glow-gold">
             {t('rules.title')}
           </h1>
 

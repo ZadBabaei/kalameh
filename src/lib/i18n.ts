@@ -96,6 +96,10 @@ const en: Translations = {
   'game.score': 'Score',
   'game.nextRoundSoon': 'Next round starting soon...',
   'game.waitingForStart': 'Waiting for them to start...',
+  'game.startRound': 'Start Round {number}',
+  'game.waitingForNextRound': 'Waiting for {player} to start Round {number}...',
+  'game.roundXWon': '{team} won Round {number}: {a} vs {b}',
+  'game.roundXTie': 'Round {number} tied: {a} vs {b}',
 
   // Results
   'results.roundWinner': 'Round {number} Winner',
@@ -224,6 +228,10 @@ const fa: Translations = {
   'game.score': 'امتیاز',
   'game.nextRoundSoon': 'دور بعدی به زودی شروع می‌شود...',
   'game.waitingForStart': 'منتظر شروع بازیکن...',
+  'game.startRound': 'شروع دور {number}',
+  'game.waitingForNextRound': 'منتظر {player} برای شروع دور {number}...',
+  'game.roundXWon': '{team} برنده دور {number} شد: {a} در برابر {b}',
+  'game.roundXTie': 'دور {number} مساوی شد: {a} در برابر {b}',
 
   // Results
   'results.roundWinner': 'برنده دور {number}',

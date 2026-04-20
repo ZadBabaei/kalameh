@@ -24,6 +24,7 @@ const GAME_EVENTS = [
   'game:phase_changed',
   'game:words_progress',
   'game:all_words_submitted',
+  'game:turn_order',
   'game:turn_started',
   'game:word_for_describer',
   'game:correct',

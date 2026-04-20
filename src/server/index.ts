@@ -4,10 +4,13 @@
  * Deploys separately from the Next.js app (e.g. Railway).
  */
 
+import { config as loadEnv } from 'dotenv';
+loadEnv({ path: '.env.local' });
+loadEnv();
+
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import { GameEngine, EngineWord } from '../lib/game-engine';
-import type { RoundNumber } from '../types/game';
+import { GameEngine, EngineWord, getRoundRules } from '../lib/game-engine';
 
 const PORT = Number(process.env.SOCKET_PORT) || 3001;
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:3000';
@@ -18,7 +21,6 @@ const io = new Server(httpServer, {
   transports: ['websocket', 'polling'],
 });
 
-// Active games stored in memory
 const games = new Map<string, GameEngine>();
 const gameLastActivity = new Map<string, number>();
 
@@ -41,6 +43,28 @@ setInterval(() => {
   }
 }, 10 * 60 * 1000);
 
+// Broadcast the start of a new turn in "awaiting start" mode.
+// Called when a player needs to click the Start button.
+function emitAwaitingStart(gameCode: string, playerId: number) {
+  const engine = games.get(gameCode);
+  if (!engine) return;
+
+  const player = engine.getPlayerById(playerId);
+  if (!player) return;
+
+  const rules = getRoundRules(engine.state.settings, engine.state.currentRound);
+  const skipsMax = rules.skipPolicy === 'unlimited' ? 999 : rules.skipLimit;
+
+  io.to(`game:${gameCode}`).emit('game:turn_started', {
+    playerId: player.id,
+    playerName: player.name,
+    team: player.team,
+    timerDuration: rules.timer,
+    skipsMax,
+    awaitingStart: true,
+  });
+}
+
 io.on('connection', (socket) => {
   const gameCode = socket.handshake.query.gameCode as string;
   const room = `game:${gameCode}`;
@@ -52,7 +76,6 @@ io.on('connection', (socket) => {
   socket.on('player:join', (data: { gameCode: string; playerName: string; playerId: number; isHost: boolean; joinOrder: number; settings?: unknown }) => {
     let engine = games.get(data.gameCode);
     if (!engine && data.settings) {
-      // Create engine from settings (first player / host)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const s = data.settings as any;
       engine = new GameEngine(0, data.gameCode, {
@@ -79,7 +102,6 @@ io.on('connection', (socket) => {
       engine.addPlayer(data.playerId, data.playerName, data.joinOrder, data.isHost, socket.id);
     }
 
-    // Broadcast player joined
     const player = engine.getPlayerById(data.playerId);
     if (player) {
       socket.to(room).emit('game:player_joined', {
@@ -93,7 +115,6 @@ io.on('connection', (socket) => {
       });
     }
 
-    // Send full state to the connecting player
     emitFullState(socket, engine);
   });
 
@@ -106,7 +127,6 @@ io.on('connection', (socket) => {
     socket.to(room).emit('game:player_reconnected', { playerId: data.playerId });
     emitFullState(socket, engine);
 
-    // Re-send word if this player is the active describer
     if (engine.state.turnState?.playerId === data.playerId && engine.state.currentWordId !== null) {
       const word = engine.state.words.find(w => w.id === engine.state.currentWordId);
       if (word) {
@@ -131,9 +151,9 @@ io.on('connection', (socket) => {
   // --- Bootstrap: Start Game (no host socket check) ---
   socket.on('bootstrap:start_game', (data: { gameCode: string; words: EngineWord[]; hostPlayerId: number }) => {
     const engine = games.get(data.gameCode);
+    console.log(`[${data.gameCode}] bootstrap:start_game received, words=${data.words?.length ?? 0}, engine=${!!engine}, phase=${engine?.state.phase}`);
     if (!engine) return;
 
-    // Only start if not already playing
     if (engine.state.phase === 'playing') return;
 
     touchGame(data.gameCode);
@@ -141,18 +161,12 @@ io.on('connection', (socket) => {
 
     try {
       const { firstPlayerId, turnOrder } = engine.startGame();
+      console.log(`[${data.gameCode}] game started, pool=${engine.state.mainBowl.length}, firstPlayer=${firstPlayerId}, order=[${turnOrder.join(',')}]`);
 
       io.to(room).emit('game:phase_changed', { phase: 'playing', round: 1 });
+      io.to(room).emit('game:turn_order', { turnOrder });
 
-      const firstPlayer = engine.getPlayerById(firstPlayerId);
-      io.to(room).emit('game:turn_started', {
-        playerId: firstPlayerId,
-        playerName: firstPlayer?.name || '',
-        team: firstPlayer?.team || 'A',
-        timerDuration: engine.state.settings.timerRound1,
-        turnOrder,
-        awaitingStart: true,
-      });
+      emitAwaitingStart(data.gameCode, firstPlayerId);
     } catch (e) {
       console.error(`[${data.gameCode}] Bootstrap start error:`, e);
     }
@@ -163,7 +177,6 @@ io.on('connection', (socket) => {
     const engine = games.get(data.gameCode);
     if (!engine) return;
 
-    // Verify sender is the host
     const sender = engine.getPlayerBySocketId(socket.id);
     if (!sender?.isHost) return;
 
@@ -185,9 +198,7 @@ io.on('connection', (socket) => {
       count: data.words.length,
     });
 
-    // If all submitted, set words on engine
     if (engine.allWordsSubmitted()) {
-      // Words should have been set via the REST API. Signal readiness.
       io.to(room).emit('game:all_words_submitted', {});
     }
   });
@@ -197,7 +208,6 @@ io.on('connection', (socket) => {
     const engine = games.get(data.gameCode);
     if (!engine) return;
 
-    // Verify sender is the host
     const sender = engine.getPlayerBySocketId(socket.id);
     if (!sender?.isHost) return;
 
@@ -206,17 +216,9 @@ io.on('connection', (socket) => {
     const { firstPlayerId, turnOrder } = engine.startGame();
 
     io.to(room).emit('game:phase_changed', { phase: 'playing', round: 1 });
+    io.to(room).emit('game:turn_order', { turnOrder });
 
-    // Tell everyone who goes first
-    const firstPlayer = engine.getPlayerById(firstPlayerId);
-    io.to(room).emit('game:turn_started', {
-      playerId: firstPlayerId,
-      playerName: firstPlayer?.name || '',
-      team: firstPlayer?.team || 'A',
-      timerDuration: engine.state.settings.timerRound1,
-      turnOrder,
-      awaitingStart: true, // Player must click Start
-    });
+    emitAwaitingStart(data.gameCode, firstPlayerId);
   });
 
   // --- Player: Start Turn ---
@@ -224,23 +226,21 @@ io.on('connection', (socket) => {
     const engine = games.get(data.gameCode);
     if (!engine) return;
 
-    // Verify socket identity matches the claimed playerId
     const socketPlayer = engine.getPlayerBySocketId(socket.id);
     if (!socketPlayer || socketPlayer.id !== data.playerId) return;
 
     const currentPlayerId = engine.getCurrentTurnPlayerId();
-    if (currentPlayerId !== data.playerId) return; // Not your turn
+    if (currentPlayerId !== data.playerId) return;
 
     touchGame(data.gameCode);
     const turnState = engine.startTurn(data.playerId);
 
-    // Start server-side timer
     engine.state.turnTimer = setTimeout(() => {
       handleTimerExpired(data.gameCode);
     }, turnState.timerDuration * 1000);
 
-    // Draw first word and send only to describer
     const word = engine.drawWord();
+    console.log(`[${data.gameCode}] player:start_turn player=${data.playerId}, pool=${engine.state.mainBowl.length}, word=${word?.text ?? 'null'}`);
     if (word) {
       const player = engine.getPlayerById(data.playerId);
       if (player?.socketId) {
@@ -248,15 +248,17 @@ io.on('connection', (socket) => {
           wordId: word.id,
           wordText: word.text,
         });
+      } else {
+        console.log(`[${data.gameCode}] player ${data.playerId} has no socketId — cannot send word`);
       }
     }
 
-    // Notify everyone the turn has truly started (timer running)
     io.to(room).emit('game:turn_started', {
       playerId: data.playerId,
       playerName: turnState.playerName,
       team: turnState.team,
       timerDuration: turnState.timerDuration,
+      skipsMax: turnState.skipsMax,
       awaitingStart: false,
     });
   });
@@ -266,7 +268,6 @@ io.on('connection', (socket) => {
     const engine = games.get(data.gameCode);
     if (!engine || engine.state.turnState?.playerId !== data.playerId) return;
 
-    // Verify socket identity
     const socketPlayer = engine.getPlayerBySocketId(socket.id);
     if (!socketPlayer || socketPlayer.id !== data.playerId) return;
 
@@ -277,13 +278,11 @@ io.on('connection', (socket) => {
 
     io.to(room).emit('game:correct', result);
 
-    // Check if round is complete
     if (engine.isRoundComplete()) {
       handleRoundComplete(data.gameCode);
       return;
     }
 
-    // Draw next word for describer
     const nextWord = engine.drawWord();
     if (nextWord) {
       const player = engine.getPlayerById(data.playerId);
@@ -301,7 +300,6 @@ io.on('connection', (socket) => {
     const engine = games.get(data.gameCode);
     if (!engine || engine.state.turnState?.playerId !== data.playerId) return;
 
-    // Verify socket identity
     const socketPlayer = engine.getPlayerBySocketId(socket.id);
     if (!socketPlayer || socketPlayer.id !== data.playerId) return;
 
@@ -315,7 +313,6 @@ io.on('connection', (socket) => {
 
     io.to(room).emit('game:skip', result);
 
-    // Draw next word for describer
     const nextWord = engine.drawWord();
     if (nextWord) {
       const player = engine.getPlayerById(data.playerId);
@@ -325,6 +322,37 @@ io.on('connection', (socket) => {
           wordText: nextWord.text,
         });
       }
+    }
+  });
+
+  // --- Player: Advance Round (finishing player clicks "Round N+1" button) ---
+  socket.on('player:advance_round', (data: { gameCode: string; playerId: number }) => {
+    const engine = games.get(data.gameCode);
+    if (!engine) return;
+
+    // Only allowed between rounds
+    if (engine.state.phase !== 'round_results') return;
+
+    // Must be the player who emptied the previous bowl
+    const expected = engine.state.lastDescriberId;
+    if (expected === null || expected !== data.playerId) return;
+
+    const socketPlayer = engine.getPlayerBySocketId(socket.id);
+    if (!socketPlayer || socketPlayer.id !== data.playerId) return;
+
+    touchGame(data.gameCode);
+
+    try {
+      const nextRound = engine.startNextRound();
+      const firstPlayerId = engine.getCurrentTurnPlayerId();
+
+      io.to(room).emit('game:phase_changed', { phase: 'playing', round: nextRound });
+
+      if (firstPlayerId !== null) {
+        emitAwaitingStart(data.gameCode, firstPlayerId);
+      }
+    } catch (e) {
+      console.error(`[${data.gameCode}] advance_round error:`, e);
     }
   });
 
@@ -341,9 +369,7 @@ io.on('connection', (socket) => {
     engine.setPlayerConnected(player.id, false, null);
     socket.to(room).emit('game:player_disconnected', { playerId: player.id });
 
-    // If the disconnected player was the active describer, end their turn
     if (engine.state.turnState?.playerId === player.id) {
-      // Clear the pending timer first to prevent double-fire
       if (engine.state.turnTimer) {
         clearTimeout(engine.state.turnTimer);
         engine.state.turnTimer = null;
@@ -360,7 +386,6 @@ function handleTimerExpired(gameCode: string) {
 
   const room = `game:${gameCode}`;
 
-  // Capture turn state BEFORE endTurn nullifies it
   const currentTurnPlayerId = engine.state.turnState.playerId;
   const result = engine.endTurn();
 
@@ -372,56 +397,41 @@ function handleTimerExpired(gameCode: string) {
     nextPlayerName: result.nextPlayerId ? engine.getPlayerById(result.nextPlayerId)?.name || null : null,
   });
 
-  // If round complete (pool emptied during this turn before timer)
   if (engine.isRoundComplete()) {
     handleRoundComplete(gameCode);
+    return;
+  }
+
+  if (result.nextPlayerId !== null) {
+    emitAwaitingStart(gameCode, result.nextPlayerId);
+    console.log(`[${gameCode}] turn advanced to player=${result.nextPlayerId}`);
   }
 }
 
 // --- Round Complete Handler ---
+// Broadcasts round_ended. For rounds 1 & 2, waits for the finishing player to
+// click the "next round" button (player:advance_round). For round 3, finalises.
 function handleRoundComplete(gameCode: string) {
   const engine = games.get(gameCode);
   if (!engine) return;
 
   const room = `game:${gameCode}`;
 
-  // End turn if still active
   if (engine.state.turnState) {
     engine.endTurn();
   }
 
   const roundResult = engine.endRound();
   io.to(room).emit('game:round_ended', roundResult);
+  console.log(`[${gameCode}] round ${roundResult.roundNumber} ended, A=${roundResult.teamAScore} B=${roundResult.teamBScore}, collected=${roundResult.collectedCount}, nextStarter=${roundResult.nextStartPlayerId}`);
 
-  if (roundResult.nextRound) {
-    // After a delay, start next round
-    setTimeout(() => {
-      const nextRound = engine.startNextRound();
-      io.to(room).emit('game:phase_changed', { phase: 'playing', round: nextRound });
-
-      const nextPlayerId = engine.getCurrentTurnPlayerId();
-      const nextPlayer = nextPlayerId ? engine.getPlayerById(nextPlayerId) : null;
-
-      if (nextPlayer) {
-        io.to(room).emit('game:turn_started', {
-          playerId: nextPlayer.id,
-          playerName: nextPlayer.name,
-          team: nextPlayer.team,
-          timerDuration: engine.state.settings[`timerRound${nextRound}` as `timerRound${1 | 2 | 3}`],
-          awaitingStart: true,
-        });
-      }
-    }, 5000); // 5 second pause between rounds
-  } else {
-    // Game over (was round 3)
+  if (!roundResult.nextRound) {
+    // Round 3 over — finalise immediately.
     const finalResult = engine.finishGame();
     io.to(room).emit('game:finished', finalResult);
-
-    // Clean up after 5 minutes
-    setTimeout(() => {
-      games.delete(gameCode);
-    }, 5 * 60 * 1000);
+    setTimeout(() => { games.delete(gameCode); }, 5 * 60 * 1000);
   }
+  // Otherwise: no auto-advance. Wait for player:advance_round from the finishing player.
 }
 
 // --- Full State Sync ---
@@ -443,6 +453,7 @@ function emitFullState(socket: { emit: (event: string, data: unknown) => void },
     players,
     currentRound: engine.state.currentRound,
     turnOrder: engine.state.turnOrder,
+    lastDescriberId: engine.state.lastDescriberId,
     currentTurn: engine.state.turnState ? {
       playerId: engine.state.turnState.playerId,
       playerName: engine.state.turnState.playerName,
@@ -452,10 +463,12 @@ function emitFullState(socket: { emit: (event: string, data: unknown) => void },
       skipsUsed: engine.state.turnState.skipsUsed,
       skipsMax: engine.state.turnState.skipsMax,
       wordsCorrect: engine.state.turnState.wordsCorrect,
+      usedSkipThisTurn: engine.state.turnState.usedSkipThisTurn,
     } : null,
     scores: engine.state.scores,
-    wordsRemaining: engine.state.roundPool.length,
+    wordsRemaining: engine.state.mainBowl.length,
     wordsTotal: engine.state.words.length,
+    collectedCount: engine.state.collectedWords.length,
   });
 }
 

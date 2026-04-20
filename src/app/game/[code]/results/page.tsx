@@ -123,17 +123,17 @@ export default function ResultsPage() {
       </div>
 
       <main className="relative z-10 flex-1 flex items-center justify-center px-4 py-8">
-        <Card variant="elevated" padding="lg" className="max-w-lg w-full text-center">
-          <h1 className="text-3xl font-bold text-[#f0e6d3] mb-2">
+        <Card variant="elevated" padding="lg" className="max-w-lg md:max-w-2xl w-full text-center">
+          <h1 className="text-3xl md:text-4xl font-bold text-[#f0e6d3] mb-2">
             {t('results.finalResults')}
           </h1>
 
           {/* Winner */}
           <div className="my-6">
             {results.winner === 'tie' ? (
-              <p className="text-2xl font-bold text-[#f5a623]">{t('results.tie')}</p>
+              <p className="text-2xl md:text-3xl font-bold text-[#f5a623]">{t('results.tie')}</p>
             ) : (
-              <p className="text-2xl font-bold">
+              <p className="text-2xl md:text-3xl font-bold">
                 <span className={results.winner === 'A' ? 'text-[#f5a623]' : 'text-[#3b82f6]'}>
                   {t('results.winner', { team: winnerTeamName })}
                 </span>
@@ -145,11 +145,11 @@ export default function ResultsPage() {
           <div className="grid grid-cols-2 gap-6 mb-8">
             <div className={`p-4 rounded-xl ${results.winner === 'A' ? 'bg-[#f5a623]/15 ring-2 ring-[#f5a623]' : 'bg-[#2a2035]'}`}>
               <div className="text-sm text-[#a89b8c] mb-1">{t('lobby.teamA')}</div>
-              <div className="text-5xl font-bold text-[#f5a623]">{results.teamATotal}</div>
+              <div className="text-5xl md:text-6xl font-bold text-[#f5a623]">{results.teamATotal}</div>
             </div>
             <div className={`p-4 rounded-xl ${results.winner === 'B' ? 'bg-[#3b82f6]/15 ring-2 ring-[#3b82f6]' : 'bg-[#2a2035]'}`}>
               <div className="text-sm text-[#a89b8c] mb-1">{t('lobby.teamB')}</div>
-              <div className="text-5xl font-bold text-[#3b82f6]">{results.teamBTotal}</div>
+              <div className="text-5xl md:text-6xl font-bold text-[#3b82f6]">{results.teamBTotal}</div>
             </div>
           </div>
 

@@ -81,6 +81,7 @@ export interface TurnState {
   skipsUsed: number;
   skipsMax: number;
   wordsCorrect: number;
+  usedSkipThisTurn?: boolean; // Round 2/3: one skip per turn
 }
 
 // Team scores across all rounds
@@ -183,12 +184,14 @@ export interface CorrectEvent {
   newScore: number;
   wordsRemaining: number;
   roundNumber: RoundNumber;
+  collectedCount: number;
 }
 
 export interface SkipEvent {
   wordsRemaining: number;
   skipsUsed: number;
   skipsMax: number;
+  usedSkipThisTurn: boolean;
 }
 
 export interface TurnEndedEvent {
@@ -205,7 +208,8 @@ export interface RoundEndedEvent {
   teamBScore: number;
   roundWinner: Team | 'tie';
   nextRound: RoundNumber | null;
-  nextStartPlayerId: number | null;
+  nextStartPlayerId: number | null; // who clicks the "Round N" button
+  collectedCount: number;
 }
 
 export interface GameFinishedEvent {
