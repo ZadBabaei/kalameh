@@ -311,7 +311,9 @@ export default function PlayPage() {
   // Round 2 uses oncePerTurn. Rounds 1 & 3 use per-round limit (respecting settings).
   const canSkip = currentRound === 2
     ? !usedSkipThisTurn
-    : (skipsMax >= 999 || skipsUsed < skipsMax);
+    : skipsMax >= 999
+      ? true
+      : skipsMax > 0 && skipsUsed < skipsMax;
 
   const teamA = players.filter((p) => p.team === 'A');
   const teamB = players.filter((p) => p.team === 'B');

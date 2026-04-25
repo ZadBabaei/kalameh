@@ -12,7 +12,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { GameEngine, EngineWord, getRoundRules } from '../lib/game-engine';
 
-const PORT = Number(process.env.SOCKET_PORT) || 3001;
+const PORT = Number(process.env.PORT) || Number(process.env.SOCKET_PORT) || 3001;
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:3000';
 
 const httpServer = createServer();

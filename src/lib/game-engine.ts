@@ -66,11 +66,12 @@ function emptyScores(): TeamScores {
 // Round rule selector — centralised so Round 3 can diverge later.
 export function getRoundRules(settings: GameSettings, round: RoundNumber): RoundRules {
   const base = getRoundConfig(settings, round);
+  const skips = Number.isFinite(base.skips) ? Math.max(0, Math.floor(Number(base.skips))) : 0;
   if (round === 1) {
     return {
       timer: base.timer,
-      skipPolicy: base.skips >= 999 ? 'unlimited' : 'perRoundLimit',
-      skipLimit: base.skips,
+      skipPolicy: skips >= 999 ? 'unlimited' : 'perRoundLimit',
+      skipLimit: skips,
       type: base.type,
     };
   }
@@ -80,8 +81,8 @@ export function getRoundRules(settings: GameSettings, round: RoundNumber): Round
   // Round 3 — honour configured skipsRound3. Isolated so rules can change later.
   return {
     timer: base.timer,
-    skipPolicy: base.skips >= 999 ? 'unlimited' : 'perRoundLimit',
-    skipLimit: base.skips,
+    skipPolicy: skips >= 999 ? 'unlimited' : 'perRoundLimit',
+    skipLimit: skips,
     type: base.type,
   };
 }
@@ -295,6 +296,7 @@ export class GameEngine {
 
     // Policy check
     if (rules.skipPolicy === 'oncePerTurn' && this.state.turnState.usedSkipThisTurn) return null;
+    if (rules.skipPolicy === 'perRoundLimit' && rules.skipLimit <= 0) return null;
     if (rules.skipPolicy === 'perRoundLimit' && this.state.turnState.skipsUsed >= rules.skipLimit) return null;
 
     // Prevent infinite loop when only one word remains.
